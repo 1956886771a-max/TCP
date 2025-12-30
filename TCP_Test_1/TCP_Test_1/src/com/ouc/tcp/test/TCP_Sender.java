@@ -7,7 +7,7 @@ import com.ouc.tcp.client.TCP_Sender_ADT;
 import com.ouc.tcp.client.UDT_Timer;
 import com.ouc.tcp.message.*;
 
-public class TCP_Sender_GBN extends TCP_Sender_ADT {
+public class TCP_Sender_TCP extends TCP_Sender_ADT {
 	
 	private static final int WINDOW_SIZE = 10;
 	private LinkedList<TCP_PACKET> sendWindow = new LinkedList<TCP_PACKET>();
@@ -16,13 +16,13 @@ public class TCP_Sender_GBN extends TCP_Sender_ADT {
 	private UDT_Timer timer;
 	
 	//构造函数
-	public TCP_Sender_GBN() {
+	public TCP_Sender_TCP() {
 		super();
 		super.initTCP_Sender(this);
 	}
 	
 	@Override
-	//可靠发送：滑动窗口+单计时器（超时重传窗口内所有未确认包）
+	//可靠发送：滑动窗口 + 单计时器（超时重传窗口内所有未确认包），累计ACK
 	public void rdt_send(int dataIndex, int[] appData) {
 		
 		//窗口满则等待
@@ -39,7 +39,7 @@ public class TCP_Sender_GBN extends TCP_Sender_ADT {
 		tcpH.setTh_seq(seq);
 		tcpS.setData(appData);
 		TCP_PACKET tcpPack = new TCP_PACKET(tcpH, tcpS, destinAddr);
-		tcpH.setTh_sum(CheckSum_GBN.computeChkSum(tcpPack));
+		tcpH.setTh_sum(CheckSum_TCP.computeChkSum(tcpPack));
 		tcpPack.setTcpH(tcpH);
 		
 		//发送
@@ -86,19 +86,18 @@ public class TCP_Sender_GBN extends TCP_Sender_ADT {
 	@Override
 	//不可靠发送：设置错误标志
 	public void udt_send(TCP_PACKET stcpPack) {
-		//允许综合错误测试
+		//综合错误测试
 		tcpH.setTh_eflag((byte)7);
 		client.send(stcpPack);
 	}
 	
 	@Override
-	//等待ACK：在recv里调用
+	//等待ACK：累计确认，前移窗口
 	public void waitACK() {
 		if(!ackQueue.isEmpty()) {
 			int ackNum = ackQueue.poll();
 			//累计确认：ackNum 表示已正确收到的最后序号
 			if(ackNum >= windowBase) {
-				//移除窗口中已确认的包
 				while(!sendWindow.isEmpty() && sendWindow.peek().getTcpH().getTh_seq() <= ackNum) {
 					sendWindow.poll();
 					windowBase = ackNum + 1;
@@ -117,11 +116,10 @@ public class TCP_Sender_GBN extends TCP_Sender_ADT {
 	@Override
 	//接收ACK报文
 	public void recv(TCP_PACKET recvPack) {
-		if(CheckSum_GBN.computeChkSum(recvPack) == recvPack.getTcpH().getTh_sum()) {
+		if(CheckSum_TCP.computeChkSum(recvPack) == recvPack.getTcpH().getTh_sum()) {
 			ackQueue.add(recvPack.getTcpH().getTh_ack());
 			waitACK();
 		}
 	}
 	
 }
-
