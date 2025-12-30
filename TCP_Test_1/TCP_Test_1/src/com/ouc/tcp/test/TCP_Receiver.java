@@ -4,57 +4,63 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.util.TreeMap;
 
 import com.ouc.tcp.client.TCP_Receiver_ADT;
 import com.ouc.tcp.message.*;
 
-public class TCP_Receiver_GBN extends TCP_Receiver_ADT {
+public class TCP_Receiver_TCP extends TCP_Receiver_ADT {
 	
 	private TCP_PACKET ackPack;
+	//期待的下一个序号
 	private int expectedSeq = 1;
+	//接收窗口，缓存失序包
+	private TreeMap<Integer, int[]> recvWindow = new TreeMap<Integer, int[]>();
+	private static final int WINDOW_SIZE = 10;
 	
 	//构造函数
-	public TCP_Receiver_GBN() {
+	public TCP_Receiver_TCP() {
 		super();
 		super.initTCP_Receiver(this);
 	}
 
 	@Override
-	//接收到数据报：按GBN逻辑处理
+	//接收到数据报：累计确认，缓存失序
 	public void rdt_recv(TCP_PACKET recvPack) {
-		//校验
-		if(CheckSum_GBN.computeChkSum(recvPack) == recvPack.getTcpH().getTh_sum()) {
-			int recvSeq = recvPack.getTcpH().getTh_seq();
+		if(CheckSum_TCP.computeChkSum(recvPack) == recvPack.getTcpH().getTh_sum()) {
+			int seq = recvPack.getTcpH().getTh_seq();
 			
-			if(recvSeq == expectedSeq) {
-				//按序，接收并前移窗口
-				dataQueue.add(recvPack.getTcpS().getData());
-				expectedSeq++;
+			//在接收窗口内
+			if(seq >= expectedSeq && seq < expectedSeq + WINDOW_SIZE) {
+				if(!recvWindow.containsKey(seq)) {
+					recvWindow.put(seq, recvPack.getTcpS().getData());
+				}
 				
-				//发送累计ACK（最后正确接收的序号）
-				sendAck(expectedSeq - 1, recvPack.getSourceAddr());
-			} else if(recvSeq > expectedSeq) {
-				//失序，丢弃并重发上次ACK
-				sendAck(expectedSeq - 1, recvPack.getSourceAddr());
-			} else {
-				//重复包，重发上次ACK
-				sendAck(expectedSeq - 1, recvPack.getSourceAddr());
+				//按序交付并前移expectedSeq
+				while(recvWindow.containsKey(expectedSeq)) {
+					dataQueue.add(recvWindow.get(expectedSeq));
+					recvWindow.remove(expectedSeq);
+					expectedSeq++;
+				}
 			}
 			
+			//发送累计ACK（最后连续正确收到的序号）
+			sendAck(expectedSeq - 1, recvPack.getSourceAddr());
+			
 		} else {
-			//校验错误，重发上次ACK
+			//校验错误，回复最近的累计ACK
 			sendAck(expectedSeq - 1, recvPack.getSourceAddr());
 		}
 		
 		//交付数据（每20组数据交付一次）
-		if(dataQueue.size() == 20) 
+		if(dataQueue.size() >= 20) 
 			deliver_data();	
 	}
 	
 	private void sendAck(int ackSeq, java.net.InetAddress addr) {
 		tcpH.setTh_ack(ackSeq);
 		ackPack = new TCP_PACKET(tcpH, tcpS, addr);
-		tcpH.setTh_sum(CheckSum_GBN.computeChkSum(ackPack));
+		tcpH.setTh_sum(CheckSum_TCP.computeChkSum(ackPack));
 		ackPack.setTcpH(tcpH);
 		reply(ackPack);
 	}
@@ -84,9 +90,8 @@ public class TCP_Receiver_GBN extends TCP_Receiver_ADT {
 	@Override
 	//回复ACK报文段
 	public void reply(TCP_PACKET replyPack) {
-		//设置错误控制标志
-		tcpH.setTh_eflag((byte)7);//允许信道综合错误测试
-		//发送数据报
+		//综合错误测试
+		tcpH.setTh_eflag((byte)7);
 		client.send(replyPack);
 	}
 	
