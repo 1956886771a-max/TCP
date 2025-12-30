@@ -3,7 +3,7 @@ package com.ouc.tcp.test;
 import com.ouc.tcp.message.TCP_HEADER;
 import com.ouc.tcp.message.TCP_PACKET;
 
-public class CheckSum_GBN {
+public class CheckSum_TCP {
 	
 	//计算TCP报文段校验和：校验TCP首部的seq、ack、sum以及数据字段
 	public static short computeChkSum(TCP_PACKET tcpPack) {
