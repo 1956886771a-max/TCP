@@ -3,9 +3,9 @@ package com.ouc.tcp.test;
 import com.ouc.tcp.message.TCP_HEADER;
 import com.ouc.tcp.message.TCP_PACKET;
 
-public class CheckSum_RDT20 {
+public class CheckSum_SR {
 	
-	//计算TCP报文段校验和：只需校验TCP首部中的seq、ack和sum，以及TCP数据字段
+	//计算TCP报文段校验和：校验TCP首部的seq、ack、sum以及数据字段
 	public static short computeChkSum(TCP_PACKET tcpPack) {
 		int checkSum = 0;
 		
@@ -40,4 +40,3 @@ public class CheckSum_RDT20 {
 		return (short)(~checkSum);
 	}
 }
-
